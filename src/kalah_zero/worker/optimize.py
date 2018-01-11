@@ -7,14 +7,14 @@ import keras.backend as K
 import numpy as np
 from keras.optimizers import SGD
 
-from connect4_zero.agent.model_connect4 import Connect4Model, objective_function_for_policy, \
+from kalah_zero.agent.model_kalah import KalahModel, objective_function_for_policy, \
     objective_function_for_value
-from connect4_zero.config import Config
-from connect4_zero.lib import tf_util
-from connect4_zero.lib.data_helper import get_game_data_filenames, read_game_data_from_file, \
+from kalah_zero.config import Config
+from kalah_zero.lib import tf_util
+from kalah_zero.lib.data_helper import get_game_data_filenames, read_game_data_from_file, \
     get_next_generation_model_dirs
-from connect4_zero.lib.model_helpler import load_best_model_weight
-from connect4_zero.env.connect4_env import Connect4Env, Player
+from kalah_zero.lib.model_helpler import load_best_model_weight
+from kalah_zero.env.kalah_env import KalahEnv, Player
 
 
 logger = getLogger(__name__)
@@ -28,7 +28,7 @@ def start(config: Config):
 class OptimizeWorker:
     def __init__(self, config: Config):
         self.config = config
-        self.model = None  # type: Connect4Model
+        self.model = None  # type: KalahModel
         self.loaded_filenames = set()
         self.loaded_data = {}
         self.dataset = None
@@ -120,8 +120,8 @@ class OptimizeWorker:
         return len(self.dataset[0])
 
     def load_model(self):
-        from connect4_zero.agent.model_connect4 import Connect4Model
-        model = Connect4Model(self.config)
+        from kalah_zero.agent.model_kalah import KalahModel
+        model = KalahModel(self.config)
         rc = self.config.resource
 
         dirs = get_next_generation_model_dirs(rc)
@@ -180,12 +180,15 @@ class OptimizeWorker:
         policy_list = []
         z_list = []
         for state, policy, z in data:
-            board = list(state)
-            board = np.reshape(board, (6, 7))
-            env = Connect4Env().update(board)
+            board = state[0]
+            board = board.split('-')
+            for i in range(len(board)):
+                board[i] = int(board[i])
+            board = np.reshape(board, (14,))
+            env = KalahEnv().update(board, state[1], state[2])
 
             black_ary, white_ary = env.black_and_white_plane()
-            state = [black_ary, white_ary] if env.player_turn() == Player.black else [white_ary, black_ary]
+            state = [black_ary, white_ary] if env.player_turn == Player.black else [white_ary, black_ary]
 
             state_list.append(state)
             policy_list.append(policy)

@@ -13,13 +13,13 @@ class EvaluateConfig:
 
 class PlayDataConfig:
     def __init__(self):
-        self.nb_game_in_file = 100
+        self.nb_game_in_file = 25
         self.max_file_num = 100  # 5000
 
 
 class PlayConfig:
     def __init__(self):
-        self.simulation_num_per_move = 25
+        self.simulation_num_per_move = 75
         self.thinking_loop = 2
         self.logging_thinking = False
         self.c_puct = 2
@@ -28,7 +28,7 @@ class PlayConfig:
         self.change_tau_turn = 10
         self.virtual_loss = 3
         self.prediction_queue_size = 16
-        self.parallel_search_num = 2
+        self.parallel_search_num = 8
         self.prediction_worker_sleep_sec = 0.0001
         self.wait_for_expanding_sleep_sec = 0.00001
 

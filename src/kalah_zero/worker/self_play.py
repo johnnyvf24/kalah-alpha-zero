@@ -3,12 +3,12 @@ from datetime import datetime
 from logging import getLogger
 from time import time
 
-from connect4_zero.agent.player_connect4 import Connect4Player
-from connect4_zero.config import Config
-from connect4_zero.env.connect4_env import Connect4Env, Winner, Player
-from connect4_zero.lib import tf_util
-from connect4_zero.lib.data_helper import get_game_data_filenames, write_game_data_to_file
-from connect4_zero.lib.model_helpler import load_best_model_weight, save_as_best_model, \
+from kalah_zero.agent.player_kalah import KalahPlayer
+from kalah_zero.config import Config
+from kalah_zero.env.kalah_env import KalahEnv, Winner, Player
+from kalah_zero.lib import tf_util
+from kalah_zero.lib.data_helper import get_game_data_filenames, write_game_data_to_file
+from kalah_zero.lib.model_helpler import load_best_model_weight, save_as_best_model, \
     reload_best_model_weight_if_changed
 
 logger = getLogger(__name__)
@@ -16,7 +16,7 @@ logger = getLogger(__name__)
 
 def start(config: Config):
     tf_util.set_session_config(per_process_gpu_memory_fraction=0.2)
-    return SelfPlayWorker(config, env=Connect4Env()).start()
+    return SelfPlayWorker(config, env=KalahEnv()).start()
 
 
 class SelfPlayWorker:
@@ -24,14 +24,14 @@ class SelfPlayWorker:
         """
 
         :param config:
-        :param Connect4Env|None env:
-        :param connect4_zero.agent.model_connect4.Connect4Model|None model:
+        :param KalahEnv|None env:
+        :param kalah_zero.agent.model_kalah.KalahModel|None model:
         """
         self.config = config
         self.model = model
-        self.env = env     # type: Connect4Env
-        self.black = None  # type: Connect4Player
-        self.white = None  # type: Connect4Player
+        self.env = env     # type: KalahEnv
+        self.black = None  # type: KalahPlayer
+        self.white = None  # type: KalahPlayer
         self.buffer = []
 
     def start(self):
@@ -46,20 +46,20 @@ class SelfPlayWorker:
             env = self.start_game(idx)
             end_time = time()
             logger.debug(f"game {idx} time={end_time - start_time} sec, "
-                         f"turn={env.turn}:{env.observation} - Winner:{env.winner}")
+                         f"turn={env.moves_made}:{env.observation} - Winner:{env.winner}")
             if (idx % self.config.play_data.nb_game_in_file) == 0:
                 reload_best_model_weight_if_changed(self.model)
             idx += 1
 
     def start_game(self, idx):
         self.env.reset()
-        self.black = Connect4Player(self.config, self.model)
-        self.white = Connect4Player(self.config, self.model)
+        self.black = KalahPlayer(self.config, self.model)
+        self.white = KalahPlayer(self.config, self.model)
         while not self.env.done:
-            if self.env.player_turn() == Player.black:
-                action = self.black.action(self.env.board)
+            if self.env.player_turn == Player.black:
+                action = self.black.action(self.env.board, self.env.player_turn, self.env.moves_made)
             else:
-                action = self.white.action(self.env.board)
+                action = self.white.action(self.env.board, self.env.player_turn, self.env.moves_made)
             self.env.step(action)
         self.finish_game()
         self.save_play_data(write=idx % self.config.play_data.nb_game_in_file == 0)
@@ -99,11 +99,9 @@ class SelfPlayWorker:
         self.white.finish_game(-black_win)
 
     def load_model(self):
-        from connect4_zero.agent.model_connect4 import Connect4Model
-        model = Connect4Model(self.config)
+        from kalah_zero.agent.model_kalah import KalahModel
+        model = KalahModel(self.config)
         if self.config.opts.new or not load_best_model_weight(model):
             model.build()
             save_as_best_model(model)
         return model
-
-

@@ -16,9 +16,9 @@ class Config:
         self.resource = ResourceConfig()
 
         if config_type == "mini":
-            import connect4_zero.configs.mini as c
+            import kalah_zero.configs.mini as c
         elif config_type == "normal":
-            import connect4_zero.configs.normal as c
+            import kalah_zero.configs.normal as c
         else:
             raise RuntimeError(f"unknown config_type: {config_type}")
         self.model = c.ModelConfig()
@@ -26,7 +26,7 @@ class Config:
         self.play_data = c.PlayDataConfig()
         self.trainer = c.TrainerConfig()
         self.eval = c.EvaluateConfig()
-        self.n_labels = 7
+        self.n_labels = 6
 
 
 class Options:
@@ -62,7 +62,7 @@ class ResourceConfig:
 
 class PlayWithHumanConfig:
     def __init__(self):
-        self.simulation_num_per_move = 50
+        self.simulation_num_per_move = 1500
         self.thinking_loop = 3
         self.logging_thinking = True
         self.c_puct = 2

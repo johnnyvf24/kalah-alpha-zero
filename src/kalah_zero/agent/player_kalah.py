@@ -6,24 +6,24 @@ import asyncio
 
 import numpy as np
 
-from connect4_zero.agent.api_connect4 import Connect4ModelAPI
-from connect4_zero.config import Config
-from connect4_zero.env.connect4_env import Connect4Env, Winner, Player
+from kalah_zero.agent.api_kalah import KalahModelAPI
+from kalah_zero.config import Config
+from kalah_zero.env.kalah_env import KalahEnv, Winner, Player
 
-CounterKey = namedtuple("CounterKey", "board next_player")
+CounterKey = namedtuple("CounterKey", "board player_turn, moves_made")
 QueueItem = namedtuple("QueueItem", "state future")
 HistoryItem = namedtuple("HistoryItem", "action policy values visit")
 
 logger = getLogger(__name__)
 
 
-class Connect4Player:
+class KalahPlayer:
     def __init__(self, config: Config, model, play_config=None):
 
         self.config = config
         self.model = model
         self.play_config = play_config or self.config.play
-        self.api = Connect4ModelAPI(self.config, self.model)
+        self.api = KalahModelAPI(self.config, self.model)
 
         self.labels_n = config.n_labels
         self.var_n = defaultdict(lambda: np.zeros((self.labels_n,)))
@@ -42,17 +42,17 @@ class Connect4Player:
 
         self.thinking_history = {}  # for fun
 
-    def action(self, board):
+    def action(self, board, player_turn, moves_made):
 
-        env = Connect4Env().update(board)
+        env = KalahEnv().update(board, player_turn, moves_made)
         key = self.counter_key(env)
 
         for tl in range(self.play_config.thinking_loop):
-            if tl > 0 and self.play_config.logging_thinking:
-                logger.debug(f"continue thinking: policy move=({action % 8}, {action // 8}), "
-                             f"value move=({action_by_value % 8}, {action_by_value // 8})")
-            self.search_moves(board)
-            policy = self.calc_policy(board)
+            # if tl > 0 and self.play_config.logging_thinking:
+            #     logger.debug(f"continue thinking: policy move=({action % 8}, {action // 8}), "
+            #                  f"value move=({action_by_value % 8}, {action_by_value // 8})")
+            self.search_moves(board, player_turn, moves_made)
+            policy = self.calc_policy(board, player_turn, moves_made)
             action = int(np.random.choice(range(self.labels_n), p=policy))
             action_by_value = int(np.argmax(self.var_q[key] + (self.var_n[key] > 0)*100))
             if action == action_by_value or env.turn < self.play_config.change_tau_turn:
@@ -61,35 +61,34 @@ class Connect4Player:
         # this is for play_gui, not necessary when training.
         self.thinking_history[env.observation] = HistoryItem(action, policy, list(self.var_q[key]), list(self.var_n[key]))
 
-        self.moves.append([env.observation, list(policy)])
+        self.moves.append([(env.observation, env.get_player_turn(), env.moves_made), list(policy)])
         return action
 
     def ask_thought_about(self, board) -> HistoryItem:
         return self.thinking_history.get(board)
 
-    def search_moves(self, board):
+    def search_moves(self, board, player_turn, moves_made):
         loop = self.loop
         self.running_simulation_num = 0
 
         coroutine_list = []
         for it in range(self.play_config.simulation_num_per_move):
-            cor = self.start_search_my_move(board)
+            cor = self.start_search_my_move(board, player_turn, moves_made)
             coroutine_list.append(cor)
 
         coroutine_list.append(self.prediction_worker())
         loop.run_until_complete(asyncio.gather(*coroutine_list))
 
-    async def start_search_my_move(self, board):
+    async def start_search_my_move(self, board, player_turn, moves_made):
         self.running_simulation_num += 1
         with await self.sem:  # reduce parallel search number
-            env = Connect4Env().update(board)
+            env = KalahEnv().update(board, player_turn, moves_made)
             leaf_v = await self.search_my_move(env, is_root_node=True)
             self.running_simulation_num -= 1
             return leaf_v
 
-    async def search_my_move(self, env: Connect4Env, is_root_node=False):
+    async def search_my_move(self, env: KalahEnv, is_root_node=False):
         """
-
         Q, V is value for this Player(always white).
         P is value for the player of next_player (black or white)
         :param env:
@@ -112,7 +111,7 @@ class Connect4Player:
         # is leaf?
         if key not in self.expanded:  # reach leaf node
             leaf_v = await self.expand_and_evaluate(env)
-            if env.player_turn() == Player.white:
+            if env.player_turn == Player.white:
                 return leaf_v  # Value for white
             else:
                 return -leaf_v  # Value for white == -Value for white
@@ -144,7 +143,7 @@ class Connect4Player:
         self.now_expanding.add(key)
 
         black_ary, white_ary = env.black_and_white_plane()
-        state = [black_ary, white_ary] if env.player_turn() == Player.black else [white_ary, black_ary]
+        state = [black_ary, white_ary] if env.player_turn == Player.black else [white_ary, black_ary]
         future = await self.predict(np.array(state))  # type: Future
         await future
         leaf_p, leaf_v = future.result()
@@ -183,19 +182,18 @@ class Connect4Player:
 
     def finish_game(self, z):
         """
-
         :param z: win=1, lose=-1, draw=0
         :return:
         """
         for move in self.moves:  # add this game winner result to all past moves.
             move += [z]
 
-    def calc_policy(self, board):
+    def calc_policy(self, board, player_turn, moves_made):
         """calc π(a|s0)
         :return:
         """
         pc = self.play_config
-        env = Connect4Env().update(board)
+        env = KalahEnv().update(board, player_turn, moves_made)
         key = self.counter_key(env)
         if env.turn < pc.change_tau_turn:
             return self.var_n[key] / np.sum(self.var_n[key])  # tau = 1
@@ -206,8 +204,8 @@ class Connect4Player:
             return ret
 
     @staticmethod
-    def counter_key(env: Connect4Env):
-        return CounterKey(env.observation, env.turn)
+    def counter_key(env: KalahEnv):
+        return CounterKey(env.observation, env.player_turn, env.moves_made)
 
     def select_action_q_and_u(self, env, is_root_node):
         key = self.counter_key(env)
@@ -224,7 +222,7 @@ class Connect4Player:
                  self.play_config.noise_eps * np.random.dirichlet([self.play_config.dirichlet_alpha] * self.labels_n)
 
         u_ = self.play_config.c_puct * p_ * xx_ / (1 + self.var_n[key])
-        if env.player_turn() == Player.white:
+        if env.player_turn == Player.white:
             v_ = (self.var_q[key] + u_ + 1000) * legal_moves
         else:
             # When enemy's selecting action, flip Q-Value.

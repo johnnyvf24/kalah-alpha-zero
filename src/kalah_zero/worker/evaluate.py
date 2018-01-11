@@ -3,13 +3,13 @@ from logging import getLogger
 from random import random
 from time import sleep
 
-from connect4_zero.agent.model_connect4 import Connect4Model
-from connect4_zero.agent.player_connect4 import Connect4Player
-from connect4_zero.config import Config
-from connect4_zero.env.connect4_env import Connect4Env, Winner, Player
-from connect4_zero.lib import tf_util
-from connect4_zero.lib.data_helper import get_next_generation_model_dirs
-from connect4_zero.lib.model_helpler import save_as_best_model, load_best_model_weight
+from kalah_zero.agent.model_kalah import KalahModel
+from kalah_zero.agent.player_kalah import KalahPlayer
+from kalah_zero.config import Config
+from kalah_zero.env.kalah_env import KalahEnv, Winner, Player
+from kalah_zero.lib import tf_util
+from kalah_zero.lib.data_helper import get_next_generation_model_dirs
+from kalah_zero.lib.model_helpler import save_as_best_model, load_best_model_weight
 
 logger = getLogger(__name__)
 
@@ -64,10 +64,10 @@ class EvaluateWorker:
         return winning_rate >= self.config.eval.replace_rate
 
     def play_game(self, best_model, ng_model):
-        env = Connect4Env().reset()
+        env = KalahEnv().reset()
 
-        best_player = Connect4Player(self.config, best_model, play_config=self.config.eval.play_config)
-        ng_player = Connect4Player(self.config, ng_model, play_config=self.config.eval.play_config)
+        best_player = KalahPlayer(self.config, best_model, play_config=self.config.eval.play_config)
+        ng_player = KalahPlayer(self.config, ng_model, play_config=self.config.eval.play_config)
         best_is_white = random() < 0.5
         if not best_is_white:
             black, white = best_player, ng_player
@@ -76,10 +76,10 @@ class EvaluateWorker:
 
         env.reset()
         while not env.done:
-            if env.player_turn() == Player.black:
-                action = black.action(env.board)
+            if env.player_turn == Player.black:
+                action = black.action(env.board, env.player_turn, env.moves_made)
             else:
-                action = white.action(env.board)
+                action = white.action(env.board, env.player_turn, env.moves_made)
             env.step(action)
 
         ng_win = None
@@ -96,7 +96,7 @@ class EvaluateWorker:
         return ng_win, best_is_white
 
     def load_best_model(self):
-        model = Connect4Model(self.config)
+        model = KalahModel(self.config)
         load_best_model_weight(model)
         return model
 
@@ -111,7 +111,7 @@ class EvaluateWorker:
         model_dir = dirs[-1] if self.config.eval.evaluate_latest_first else dirs[0]
         config_path = os.path.join(model_dir, rc.next_generation_model_config_filename)
         weight_path = os.path.join(model_dir, rc.next_generation_model_weight_filename)
-        model = Connect4Model(self.config)
+        model = KalahModel(self.config)
         model.load(config_path, weight_path)
         return model, model_dir
 
